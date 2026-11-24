@@ -1,0 +1,13 @@
+build/
+build-*/
+build_xp*/
+dist/
+stage/
+.vs/
+*.o
+*.obj
+*.exe
+*.pdb
+*.wav
+*.cas
+*.zip

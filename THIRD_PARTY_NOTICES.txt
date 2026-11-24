@@ -1,0 +1,42 @@
+MSX CF-2000 Studio 0.1.0 - third-party notices
+================================================
+
+1. openMSX
+----------
+This product does not bundle openMSX.  The user may install openMSX separately.
+openMSX is licensed under the GNU General Public License version 2 (or later).
+If openMSX is distributed together with this application, the combined
+distribution must comply with the GPL.  See https://openmsx.org/ and the
+openMSX source tree for the exact license and source code.
+
+The Japanese MSX character mapping in core/src/charset.cpp is derived from
+openMSX's share/unicodemaps/character_set_mappings/MSXVIDJP.TXT
+(author: Rebecca Bettencourt, date: 2021-11-21).  Because that data originates
+in the openMSX project, verify GPLv2 compatibility before distributing this
+application under another license.
+
+2. MSX ROM / BIOS
+-----------------
+No MSX ROM, BIOS, or CF-2000 ROM is included.  Obtain a legally usable ROM for
+the emulator separately.  MSX is a trademark of the MSX Licensing Corporation.
+
+3. Inno Setup
+-------------
+The installer is built with Inno Setup 5.6.1.  Inno Setup is not bundled as a
+runtime component; its license applies to the build tool.  See
+https://jrsoftware.org/isinfo.php.
+
+4. Cassette / BASIC format references
+-------------------------------------
+The implementation uses publicly documented MSX format information:
+- MSX2 Technical Handbook, Chapter 5 (Cassette Interface)
+- MSX Wiki: Internal Structure Of BASIC listing, MSX-BASIC file formats, CSAVE
+- MSX Technical Data Book / MSX Red Book references
+- openMSX src/cassette/CasImage.cc for CAS block handling (GPLv2)
+
+5. No warranty
+--------------
+This is a preview implementation for the CF-2000 development project.  It has
+not passed the acceptance tests in the technical specification (XP, real
+CF-2000, physical tape, openMSX).  Use at your own risk and keep backups of
+source files, CAS images, and WAV recordings.

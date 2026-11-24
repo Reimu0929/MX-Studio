@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux (core + CLI + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DMSX_BUILD_TESTS=ON -DMSX_BUILD_TOOLS=ON
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Tests
+        run: |
+          ctest --test-dir build --output-on-failure
+          ./build/tools/msxtool/msxtool selftest
+
+      - name: CLI round trip
+        run: |
+          set -euo pipefail
+          W="$RUNNER_TEMP/roundtrip"
+          mkdir -p "$W"
+          T=./build/tools/msxtool/msxtool
+          "$T" bas2cas examples/HELLO.bas -o "$W/HELLO.cas" --name HELLO
+          "$T" cas2wav "$W/HELLO.cas" -o "$W/HELLO.wav" --baud 2400 --volume 60
+          "$T" normalize "$W/HELLO.wav" -o "$W/HELLO.normalized.wav"
+          "$T" wav2cas "$W/HELLO.normalized.wav" -o "$W/HELLO2.cas"
+          "$T" cas2bas "$W/HELLO2.cas" -o "$W/HELLO2.bas"
+          "$T" tokenize examples/HELLO.bas -o "$W/A.bin"
+          "$T" tokenize "$W/HELLO2.bas" -o "$W/B.bin"
+          cmp "$W/A.bin" "$W/B.bin"
+
+  windows:
+    name: Windows (MSVC, Win32)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-win -G "Visual Studio 17 2022" -A Win32
+          -DMSX_BUILD_WIN32=ON -DMSX_BUILD_TOOLS=ON -DMSX_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-win --config Release
+
+      - name: Tests
+        shell: cmd
+        run: |
+          ctest --test-dir build-win -C Release --output-on-failure
+          if errorlevel 1 exit /b 1
+          build-win\tools\msxtool\Release\msxtool.exe selftest
+          if errorlevel 1 exit /b 1
+
+      - name: CLI round trip
+        shell: cmd
+        run: |
+          set "W=%RUNNER_TEMP%\roundtrip"
+          if not exist "%W%" mkdir "%W%"
+          build-win\tools\msxtool\Release\msxtool.exe bas2cas examples\HELLO.bas -o "%W%\HELLO.cas" --name HELLO
+          if errorlevel 1 exit /b 1
+          build-win\tools\msxtool\Release\msxtool.exe cas2wav "%W%\HELLO.cas" -o "%W%\HELLO.wav" --baud 2400 --volume 60
+          if errorlevel 1 exit /b 1
+          build-win\tools\msxtool\Release\msxtool.exe normalize "%W%\HELLO.wav" -o "%W%\HELLO.normalized.wav"
+          if errorlevel 1 exit /b 1
+          build-win\tools\msxtool\Release\msxtool.exe wav2cas "%W%\HELLO.normalized.wav" -o "%W%\HELLO2.cas"
+          if errorlevel 1 exit /b 1
+          build-win\tools\msxtool\Release\msxtool.exe cas2bas "%W%\HELLO2.cas" -o "%W%\HELLO2.bas"
+          if errorlevel 1 exit /b 1
+          build-win\tools\msxtool\Release\msxtool.exe tokenize examples\HELLO.bas -o "%W%\A.bin"
+          if errorlevel 1 exit /b 1
+          build-win\tools\msxtool\Release\msxtool.exe tokenize "%W%\HELLO2.bas" -o "%W%\B.bin"
+          if errorlevel 1 exit /b 1
+          fc /b "%W%\A.bin" "%W%\B.bin" >nul
+          if errorlevel 1 exit /b 1
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $stage = "stage/MX-Studio"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item build-win/app/win32/Release/msxstudio.exe $stage
+          Copy-Item build-win/tools/msxtool/Release/msxtool.exe $stage
+          Copy-Item -Recurse examples, docs $stage
+          Copy-Item LICENSE, THIRD_PARTY_NOTICES.txt, README.md $stage
+          Compress-Archive -Path $stage -DestinationPath MX-Studio-win32.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MX-Studio-win32
+          path: MX-Studio-win32.zip
+          if-no-files-found: error

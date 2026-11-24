@@ -1,0 +1,114 @@
+#pragma code_page(65001)
+
+#include <windows.h>
+#include "resource.h"
+
+IDR_MAIN_MENU MENU
+BEGIN
+    POPUP "ファイル(&F)"
+    BEGIN
+        MENUITEM "新規(&N)\tCtrl+N", IDM_FILE_NEW
+        MENUITEM "開く(&O)...\tCtrl+O", IDM_FILE_OPEN
+        MENUITEM "保存(&S)\tCtrl+S", IDM_FILE_SAVE
+        MENUITEM "名前を付けて保存(&A)...", IDM_FILE_SAVE_AS
+        MENUITEM SEPARATOR
+        MENUITEM "終了(&X)", IDM_FILE_EXIT
+    END
+    POPUP "編集(&E)"
+    BEGIN
+        MENUITEM "元に戻す(&U)\tCtrl+Z", IDM_EDIT_UNDO
+        MENUITEM "やり直し(&R)\tCtrl+Y", IDM_EDIT_REDO
+        MENUITEM "切り取り(&T)\tCtrl+X", IDM_EDIT_CUT
+        MENUITEM "コピー(&C)\tCtrl+C", IDM_EDIT_COPY
+        MENUITEM "貼り付け(&P)\tCtrl+V", IDM_EDIT_PASTE
+        MENUITEM "すべて選択(&A)\tCtrl+A", IDM_EDIT_SELECT_ALL
+        MENUITEM SEPARATOR
+        MENUITEM "補完(&M)\tCtrl+Space", IDM_EDIT_COMPLETE
+    END
+    POPUP "実行・デバッグ(&R)"
+    BEGIN
+        MENUITEM "検証(&V)\tF5", IDM_RUN_VALIDATE
+        MENUITEM "CF-2000 へ送信(&S)\tF6", IDM_RUN_SEND
+        MENUITEM "停止(&O)", IDM_RUN_STOP
+        MENUITEM SEPARATOR
+        MENUITEM "ログを消去(&L)", IDM_RUN_CLEAR_LOG
+    END
+    POPUP "テープ(&T)"
+    BEGIN
+        MENUITEM "テープ設定(&O)...", IDM_TAPE_SETTINGS
+        MENUITEM "送信 WAV を保存(&W)...", IDM_TAPE_SAVE_WAV
+        MENUITEM "録音(&R)...\tF7", IDM_TAPE_RECORD
+        MENUITEM "入力レベル監視(&M)", IDM_TAPE_MONITOR
+        MENUITEM "クリップ表示を解除(&C)", IDM_TAPE_RESET_CLIP
+        MENUITEM "Windows の録音ミキサーを開く(&X)", IDM_TAPE_MIXER
+        MENUITEM "WAV を復号(&D)...\tF8", IDM_TAPE_DECODE
+    END
+    POPUP "ヘルプ(&H)"
+    BEGIN
+        MENUITEM "使い方(&H)", IDM_HELP_GUIDE
+        MENUITEM "バージョン情報(&A)", IDM_HELP_ABOUT
+    END
+END
+
+IDR_ACCELERATORS ACCELERATORS
+BEGIN
+    "N", IDM_FILE_NEW, VIRTKEY, CONTROL
+    "O", IDM_FILE_OPEN, VIRTKEY, CONTROL
+    "S", IDM_FILE_SAVE, VIRTKEY, CONTROL
+    "Z", IDM_EDIT_UNDO, VIRTKEY, CONTROL
+    "Y", IDM_EDIT_REDO, VIRTKEY, CONTROL
+    VK_F5, IDM_RUN_VALIDATE, VIRTKEY
+    VK_F6, IDM_RUN_SEND, VIRTKEY
+    VK_F7, IDM_TAPE_RECORD, VIRTKEY
+    VK_F8, IDM_TAPE_DECODE, VIRTKEY
+END
+
+IDD_TAPE DIALOGEX 0, 0, 210, 172
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "テープ設定"
+FONT 9, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT "MSX ファイル名（6 バイト以内）:", IDC_NAME_LABEL, 10, 10, 190, 10
+    EDITTEXT IDC_TAPENAME, 10, 22, 90, 14, ES_AUTOHSCROLL
+    LTEXT "入力機器:", IDC_STATIC, 10, 42, 46, 10
+    COMBOBOX IDC_DEVICE, 60, 40, 130, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT "ボーレート:", IDC_BAUD_LABEL, 10, 62, 50, 10
+    CONTROL "1200 baud（標準）", IDC_BAUD1, "Button", BS_AUTORADIOBUTTON | WS_GROUP, 60, 60, 100, 12
+    CONTROL "2400 baud（高速）", IDC_BAUD2, "Button", BS_AUTORADIOBUTTON, 60, 74, 100, 12
+    LTEXT "送信音量（100%=-7dBFS）:", IDC_VOLUME_LABEL, 10, 90, 130, 10
+    EDITTEXT IDC_VOLUME, 145, 88, 28, 14, ES_NUMBER
+    LTEXT "%", IDC_VOLUME_PERCENT, 176, 90, 10, 10
+    CONTROL "送信レベルを自動（-7 dBFS）にする", IDC_VOLUME_AUTO, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 10, 104, 190, 12
+    CONTROL "録音後に復号用の正規化コピーを作る", IDC_REC_NORMALIZE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 10, 118, 190, 12
+    LTEXT "ファイル名は切り詰めません（6 バイト超過はエラー）。", IDC_NOTE, 10, 134, 190, 20
+    DEFPUSHBUTTON "OK", IDOK, 96, 154, 50, 14
+    PUSHBUTTON "キャンセル", IDCANCEL, 150, 154, 50, 14
+END
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041103b5"
+        BEGIN
+            VALUE "CompanyName", "MSX CF-2000 project"
+            VALUE "FileDescription", "MSX CF-2000 Studio"
+            VALUE "FileVersion", "0.1.0.0"
+            VALUE "InternalName", "msxstudio"
+            VALUE "OriginalFilename", "msxstudio.exe"
+            VALUE "ProductName", "MSX CF-2000 Studio"
+            VALUE "ProductVersion", "0.1.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x411, 1205
+    END
+END
