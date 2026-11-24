@@ -96,7 +96,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
           Copy-Item build-win/app/win32/Release/msxstudio.exe $stage
           Copy-Item build-win/tools/msxtool/Release/msxtool.exe $stage
-          Copy-Item -Recurse examples, docs $stage
+          Copy-Item -Recurse examples, docs, scripts $stage
           Copy-Item LICENSE, THIRD_PARTY_NOTICES.txt, README.md $stage
           Compress-Archive -Path $stage -DestinationPath MX-Studio-win32.zip -Force
 
