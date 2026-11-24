@@ -16,7 +16,7 @@ echo File: %EXE%
 set "VSPATH="
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if exist "%VSWHERE%" (
-  for /f "usebackq delims=" %%V in (`call "%VSWHERE%" -latest -version "[15.0,16.0)" -products * -property installationPath`) do set "VSPATH=%%V"
+  for /f "usebackq delims=" %%V in (`call "%VSWHERE%" -latest -version "[15.0,18.0)" -products * -property installationPath`) do set "VSPATH=%%V"
 )
 
 set "DUMPBIN="
@@ -27,7 +27,7 @@ if not defined DUMPBIN (
   for /f "delims=" %%D in ('where dumpbin.exe 2^>nul') do set "DUMPBIN=%%D"
 )
 if not defined DUMPBIN (
-  echo [NG] dumpbin.exe was not found. Run this from a VS2017 developer prompt.
+  echo [NG] dumpbin.exe was not found. Run this from a Visual Studio developer prompt.
   exit /b 1
 )
 
