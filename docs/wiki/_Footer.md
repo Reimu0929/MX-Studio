@@ -1,0 +1,1 @@
+MSX CF-2000 Studio 0.1.0 — MIT License — 実機・XP・openMSX は未検証です。
