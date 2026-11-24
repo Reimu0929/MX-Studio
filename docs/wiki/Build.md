@@ -61,7 +61,7 @@ cmake --build build-win -j
 
 ## CI
 
-GitHub Actions で次を実行しています。
+GitHub Actions は**リリースタグ（`v*`）と手動実行のみ**で動きます。通常の push では走りません。
 
 - Linux: ビルド、`ctest`、`selftest`、往復変換
 - Windows: MSVC（Win32）でビルド、`ctest`、`selftest`、往復変換、ZIP 作成

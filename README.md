@@ -47,7 +47,7 @@ XP 版はタグ `v*` を push すると GitHub Actions が v141_xp ツールセ�
 | WAV のピーク正規化（復号用コピー。原音は無加工で保持） | 実装 |
 | Win32 ネイティブ UI（メニュー＋ツールバー、RichEdit、レベルメーター、録音・送信・復号） | 実装 |
 | 実機 ROM のダンプ補助（`scripts/dump-cf2000-rom.bat`） | 実装 |
-| openMSX 連携（行ブレークポイント・変数表示） | **未実装**（次工程） |
+| openMSX 0.12.0 連携（行ブレークポイント・変数表示） | **調査完了・未実装**（[docs/openmsx.md](docs/openmsx.md)） |
 | 実機・XP SP3・物理テープでの受入試験 | **未実施** |
 
 ## すぐ使う
@@ -202,7 +202,7 @@ examples/             サンプル BASIC
 ## 既知の制限（0.1.0）
 
 - XP SP3・実機・物理テープ・openMSX での受入試験は未実施。
-- openMSX 連携（行停止、変数表示）は未実装。
+- openMSX 連携（行停止、変数表示）は未実装。調査結果は `docs/openmsx.md`。
 - 音声入力の機器選択と録音ミキサー起動は UI にあるが、実機ドライバーでの確認は未実施。
 - アプリの復号はステレオ WAV の第 1 チャンネルのみ。CLI は `--channel` に対応。
 - 漢字は CF-2000 の文字コードにないため、コンパイル時にエラーとして報告（`?` 置換なし）。
@@ -217,6 +217,7 @@ examples/             サンプル BASIC
 - 解析: [`docs/analysis.md`](docs/analysis.md)
 - 形式: [`docs/formats.md`](docs/formats.md)
 - 検証: [`docs/verification.md`](docs/verification.md)
+- openMSX 調査: [`docs/openmsx.md`](docs/openmsx.md)
 
 ## ライセンス
 
