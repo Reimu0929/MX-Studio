@@ -65,3 +65,6 @@ GitHub Actions で次を実行しています。
 
 - Linux: ビルド、`ctest`、`selftest`、往復変換
 - Windows: MSVC（Win32）でビルド、`ctest`、`selftest`、往復変換、ZIP 作成
+- Windows XP: v141_xp ツールセットを導入してビルドし、インポート検査と
+  smoke test を実行（タグ時と手動実行時のみ）。タグ `v*` では 2 つの ZIP が
+  リリースに自動添付されます

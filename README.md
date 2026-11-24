@@ -23,13 +23,14 @@ runtime dependencies and no installation.
 | ファイル | 内容 |
 | --- | --- |
 | `MX-Studio-<版>-win32.zip` | `msxstudio.exe`（GUI）、`msxtool.exe`（CLI）、サンプル、ドキュメント。CI でビルドと動作確認済み（Windows 10/11） |
-| `MX-Studio-<版>-win32-xp.zip` | MSVC **v141_xp** でビルドした XP 対応版（PE 5.01・静的 CRT）。用意されている場合のみ |
+| `MX-Studio-<版>-win32-xp.zip` | MSVC **v141_xp** でビルドした XP 対応版（PE 5.01・静的 CRT）。CI で自動ビルド |
 
 DLL の追加インストールは不要です（静的リンク）。
 設定は `HKCU\Software\MSXCF2000Studio` に保存され、アンインストールはフォルダー削除だけです。
 
-Windows XP 用のビルドは VS2017 + v141_xp が必要なため、手元で作成します
-（[ビルド](#windowsxp-対応msvc-v141_xp) を参照）。
+XP 版はタグ `v*` を push すると GitHub Actions が v141_xp ツールセットを導入して
+自動ビルドし、リリースに添付します。手元で作る手順は
+[ビルド](#windowsxp-対応msvc-v141_xp) を参照してください。
 
 ## できること
 
