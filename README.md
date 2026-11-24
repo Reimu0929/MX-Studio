@@ -11,8 +11,9 @@ runtime dependencies and no installation.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 - 版: **0.1.0**（プレビュー）
-- 対応: Windows XP SP3 ～ 11（32 bit）。Linux では CLI とコアのみビルド可。
-- 状態: コア・自動試験・MSVC v141_xp ビルドは確認済み。**XP 実機・物理テープ・openMSX は未試験。**
+- 対応: Windows 32 bit（XP SP3 は v141_xp ビルド）。Linux では CLI とコアのみビルド可。
+- 状態: コア・自動試験・MSVC ビルドは確認済み。**XP 実機・物理テープ・openMSX は未試験。**
+- ドキュメント: [Wiki](https://github.com/Reimu0929/MX-Studio/wiki)
 
 ## ダウンロード
 
