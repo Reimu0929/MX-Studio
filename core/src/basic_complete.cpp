@@ -29,20 +29,6 @@ bool startsWithIgnoreCase(const std::string& text, const std::string& prefix) {
     return true;
 }
 
-std::string upperTrimmedBefore(const std::string& line, std::size_t pos) {
-    while (pos > 0 && (line[pos - 1] == ' ' || line[pos - 1] == '\t')) --pos;
-    std::size_t start = pos;
-    while (start > 0 && (std::isalnum(static_cast<unsigned char>(line[start - 1])) ||
-                         line[start - 1] == '_')) {
-        --start;
-    }
-    std::string word = line.substr(start, pos - start);
-    for (std::size_t i = 0; i < word.size(); ++i) {
-        if (word[i] >= 'a' && word[i] <= 'z') word[i] = static_cast<char>(word[i] - 'a' + 'A');
-    }
-    return word;
-}
-
 struct Hint {
     const char* keyword;
     const char* text;
@@ -135,21 +121,57 @@ std::vector<CompletionItem> completeAt(const std::string& utf8Source, std::size_
     std::size_t prefixStart = localCaret;
     while (prefixStart > 0 && isWordByte(line[prefixStart - 1])) --prefixStart;
     const std::string prefix = line.substr(prefixStart, localCaret - prefixStart);
+    const std::size_t absolutePrefix = ls + prefixStart;
 
-    // Line number context: after GOTO/GOSUB/THEN/ELSE/... or a numeric prefix.
-    bool wantLineNumbers = !prefix.empty() && std::isdigit(static_cast<unsigned char>(prefix[0]));
-    if (!wantLineNumbers) {
-        const std::string before = upperTrimmedBefore(line, prefixStart);
-        static const char* kRefWords[] = {"GOTO", "GOSUB", "THEN", "ELSE", "RESTORE",
-                                          "RUN",  "RESUME", "LIST", "LLIST", "DELETE", "RENUM"};
-        for (std::size_t i = 0; i < sizeof(kRefWords) / sizeof(kRefWords[0]); ++i) {
-            if (before == kRefWords[i]) {
-                wantLineNumbers = true;
+    // The token that comes before the word being typed decides the context.
+    const LexToken* before = nullptr;
+    for (std::size_t i = 0; i < lex.tokens.size(); ++i) {
+        const LexToken& t = lex.tokens[i];
+        if (t.offset < ls) continue;
+        if (t.offset >= absolutePrefix) break;
+        if (t.kind == LexKind::EndOfLine) break;
+        if (t.kind == LexKind::LineNumber && !before) continue;
+        before = &t;
+    }
+
+    const bool digitPrefix = !prefix.empty() && std::isdigit(static_cast<unsigned char>(prefix[0]));
+    bool lineRefKeyword = false;
+    static const char* const kLineRefWords[] = {"GOTO", "GOSUB", "RESTORE", "RUN", "RESUME",
+                                                "LIST", "LLIST", "DELETE", "RENUM"};
+    if (before && before->kind == LexKind::Keyword) {
+        for (std::size_t i = 0; i < sizeof(kLineRefWords) / sizeof(kLineRefWords[0]); ++i) {
+            if (before->text == kLineRefWords[i]) {
+                lineRefKeyword = true;
                 break;
             }
         }
     }
-    if (wantLineNumbers) {
+
+    const bool afterThenElse = before && before->kind == LexKind::Keyword &&
+                               (before->text == "THEN" || before->text == "ELSE");
+
+    if (digitPrefix || lineRefKeyword) {
+        for (std::size_t i = 0; i < lex.lines.size(); ++i) {
+            const std::string label = std::to_string(lex.lines[i].number);
+            if (!startsWithIgnoreCase(label, prefix)) continue;
+            CompletionItem item;
+            item.kind = CompletionItem::Kind::LineNumber;
+            item.label = label;
+            item.insertText = label;
+            item.detail = "行番号";
+            items.push_back(item);
+        }
+        return items;
+    }
+
+    bool statementContext = true;
+    if (before) {
+        statementContext = (before->kind == LexKind::Separator && before->text == ":") ||
+                           (before->kind == LexKind::Keyword &&
+                            (before->text == "THEN" || before->text == "ELSE"));
+    }
+
+    if (afterThenElse && (prefix.empty() || digitPrefix)) {
         for (std::size_t i = 0; i < lex.lines.size(); ++i) {
             CompletionItem item;
             item.kind = CompletionItem::Kind::LineNumber;
@@ -158,22 +180,25 @@ std::vector<CompletionItem> completeAt(const std::string& utf8Source, std::size_
             item.detail = "行番号";
             items.push_back(item);
         }
-        return items;
     }
 
+    std::vector<CompletionItem> keywordsFound;
     std::set<std::string> seen;
     const std::vector<Keyword>& table = keywords();
     for (std::size_t i = 0; i < table.size(); ++i) {
         const Keyword& kw = table[i];
         if (kw.flags & KF_Operator) continue;
         if ((kw.flags & KF_MSX2) && !profile.msx2Commands) continue;
+        const bool isFunction = (kw.flags & KF_Function) != 0;
+        if (statementContext && isFunction) continue;
+        if (!statementContext && !isFunction) continue;
         if (!startsWithIgnoreCase(kw.text, prefix)) continue;
         if (!seen.insert(kw.text).second) continue;
         CompletionItem item;
-        item.kind = (kw.flags & KF_Function) ? CompletionItem::Kind::Function : CompletionItem::Kind::Keyword;
+        item.kind = isFunction ? CompletionItem::Kind::Function : CompletionItem::Kind::Keyword;
         item.label = kw.text;
         item.insertText = kw.text;
-        if (item.kind == CompletionItem::Kind::Function) {
+        if (isFunction) {
             if (item.insertText.empty() || item.insertText[item.insertText.size() - 1] != '(') {
                 item.insertText += "(";
             }
@@ -183,13 +208,21 @@ std::vector<CompletionItem> completeAt(const std::string& utf8Source, std::size_
             item.detail = "命令";
         }
         if (kw.flags & KF_Disk) item.detail += "（ディスクBASIC）";
-        items.push_back(item);
+        keywordsFound.push_back(item);
     }
+    std::sort(keywordsFound.begin(), keywordsFound.end(),
+              [](const CompletionItem& a, const CompletionItem& b) { return a.label < b.label; });
+    items.insert(items.end(), keywordsFound.begin(), keywordsFound.end());
 
     std::set<std::string> variables;
     for (std::size_t i = 0; i < lex.tokens.size(); ++i) {
-        if (lex.tokens[i].kind == LexKind::Variable) variables.insert(lex.tokens[i].text);
+        const LexToken& t = lex.tokens[i];
+        if (t.kind != LexKind::Variable) continue;
+        // Skip the word being typed.
+        if (t.offset < caret && t.offset + t.length >= caret) continue;
+        variables.insert(t.text);
     }
+    std::vector<CompletionItem> variableItems;
     for (std::set<std::string>::const_iterator it = variables.begin(); it != variables.end(); ++it) {
         if (!startsWithIgnoreCase(*it, prefix)) continue;
         if (seen.count(*it) != 0) continue;
@@ -198,8 +231,11 @@ std::vector<CompletionItem> completeAt(const std::string& utf8Source, std::size_
         item.label = *it;
         item.insertText = *it;
         item.detail = "変数";
-        items.push_back(item);
+        variableItems.push_back(item);
     }
+    std::sort(variableItems.begin(), variableItems.end(),
+              [](const CompletionItem& a, const CompletionItem& b) { return a.label < b.label; });
+    items.insert(items.end(), variableItems.begin(), variableItems.end());
     return items;
 }
 

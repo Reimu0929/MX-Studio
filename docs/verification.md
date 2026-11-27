@@ -8,7 +8,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | コア試験 | Linux, GCC 15.2.0, C++14, CMake 4.2.3 |
-| 結果 | 821 checks / 0 failures（`ctest` 1/1） |
+| 結果 | 827 checks / 0 failures（`ctest` 1/1） |
 | コマンド | `cmake --build build && ctest --test-dir build --output-on-failure` |
 | CLI | `msxtool selftest` が 1200/2400 の生成・復調・バイト一致を確認 |
 | Win32 | **MSVC v141_xp ビルド成功**（VS2017 15.9.37902.15, CMake 4.5.1, 2026-11-24）。PE subsystem 5.1、UCRT/VCランタイムなし。XP 実機起動は未試験。MinGW 32bit クロスビルドも可 |
@@ -57,6 +57,7 @@
 24. `tokenizer_word_operators` — AND/OR/XOR/EQV/IMP/MOD/NOT のトークン化
 25. `fsk_dropout_is_not_clean` — データ途中の欠落を `clean=false` として拒否
 26. `wav_normalize` — ピーク正規化（+12 dB 上限、-6 dBFS 目標、無音拒否、出力WAVの妥当性）
+27. `completion_context` — 行頭は命令、式は関数、GOTO 後は行番号、THEN 後は両方
 
 ## 4. Win32 ビルド確認
 

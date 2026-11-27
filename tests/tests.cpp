@@ -867,6 +867,50 @@ TEST(completion_basics) {
     CHECK_EQ(argumentHintAt("10 PRINT ", 9, cf2000Profile()).empty(), false);
 }
 
+TEST(completion_context) {
+    // Statement start: statements are offered.
+    const std::string stmt = "10 ";
+    std::vector<CompletionItem> atStart = completeAt(stmt, stmt.size(), cf2000Profile());
+    bool startHasPrint = false;
+    for (std::size_t i = 0; i < atStart.size(); ++i) {
+        if (atStart[i].label == "PRINT") startHasPrint = true;
+    }
+    CHECK(startHasPrint);
+
+    // Expression after PRINT: functions are offered, statements are not.
+    const std::string expr = "10 PRINT ";
+    std::vector<CompletionItem> inExpr = completeAt(expr, expr.size(), cf2000Profile());
+    bool exprHasAbs = false;
+    bool exprHasPrint = false;
+    for (std::size_t i = 0; i < inExpr.size(); ++i) {
+        if (inExpr[i].label == "ABS") exprHasAbs = true;
+        if (inExpr[i].label == "PRINT") exprHasPrint = true;
+    }
+    CHECK(exprHasAbs);
+    CHECK(!exprHasPrint);
+
+    // After GOTO: only line numbers.
+    const std::string go = "10 GOTO \n20 A=1\n";
+    std::vector<CompletionItem> lineOnly = completeAt(go, 8, cf2000Profile());
+    bool onlyLines = !lineOnly.empty();
+    for (std::size_t i = 0; i < lineOnly.size(); ++i) {
+        if (lineOnly[i].kind != CompletionItem::Kind::LineNumber) onlyLines = false;
+    }
+    CHECK(onlyLines);
+
+    // After THEN: line numbers and statements.
+    const std::string thenSrc = "10 IF A THEN \n";
+    std::vector<CompletionItem> afterThen = completeAt(thenSrc, 13, cf2000Profile());
+    bool thenHasLine = false;
+    bool thenHasPrint = false;
+    for (std::size_t i = 0; i < afterThen.size(); ++i) {
+        if (afterThen[i].kind == CompletionItem::Kind::LineNumber) thenHasLine = true;
+        if (afterThen[i].label == "PRINT") thenHasPrint = true;
+    }
+    CHECK(thenHasLine);
+    CHECK(thenHasPrint);
+}
+
 TEST(lexer_basics) {
     LexResult lex = lexSource("10 A=0.5:REM hi\n20 PRINT \"X\"\n", cf2000Profile());
     CHECK(!lex.diags.hasErrors());

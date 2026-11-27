@@ -37,7 +37,7 @@ XP 版はタグ `v*` を push すると GitHub Actions が v141_xp ツールセ�
 
 | 機能 | 状態 |
 | --- | --- |
-| UTF-8 BASIC ソースの字句解析・構文色分け・補完・静的診断 | 実装 |
+| UTF-8 BASIC ソースの字句解析・構文色分け・文脈対応の自動補完・引数ヒント・静的診断 | 実装 |
 | MSX BASIC トークン化（行リンク、0x0E 行参照、BCD 数値、REM/DATA/文字列） | 実装 |
 | トークン列から BASIC テキストへの逆変換（LIST 相当） | 実装 |
 | 日本語 MSX 文字コード（半角カナ・ひらがな・グラフィック文字）の相互変換 | 実装 |
@@ -60,7 +60,14 @@ XP 版はタグ `v*` を push すると GitHub Actions が v141_xp ツールセ�
 3. `F6` 送信（テープ設定 → PC の音声出力から FSK を再生）
 4. `F7` 録音（48 kHz / 16 bit / モノラル WAV）
 5. `F8` 復号（WAV → CAS / BASIC）
-6. `Ctrl+Space` 補完、`Ctrl+Z` Undo、`Ctrl+S` 保存
+6. `Ctrl+Space` 補完（入力中は自動表示）、`Ctrl+Z` Undo、`Ctrl+S` 保存
+
+入力支援:
+
+- 文脈に応じた候補: 行頭は命令、式の中は関数と変数、
+  `GOTO` / `GOSUB` / `THEN` / `ELSE` の後は行番号
+- ステータスバーに **行:桁** と **引数ヒント**（例: `PRINT [式][;|,]...`）を表示
+- 色分け: 命令（太字）・関数・変数・演算子・区切り・数値・文字列・コメント・`DATA`
 
 テープ設定では次を指定できます。
 
@@ -176,7 +183,7 @@ ctest --test-dir build --output-on-failure
 ./build/tools/msxtool/msxtool selftest
 ```
 
-現在の自動試験: **821 checks / 0 failures**（26 グループ）。
+現在の自動試験: **827 checks / 0 failures**（27 グループ）。
 FSK の往復は自作波形と自作復調によるもので、規格適合の証明ではありません。
 
 ### MinGW クロスコンパイル（確認用）

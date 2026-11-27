@@ -21,6 +21,7 @@
 
 #include "msx/basic.h"
 #include "msx/basic_complete.h"
+#include "msx/basic_token.h"
 #include "msx/basic_lexer.h"
 #include "msx/charset.h"
 #include "msx/common.h"
@@ -69,6 +70,8 @@ struct App {
     bool autoNormalizeRecording = true;
     std::wstring lastRecordingPath;
 };
+
+#define WM_APP_AUTOCOMPLETE (WM_APP + 20)
 
 App g_app;
 WNDPROC g_editorProc = nullptr;
@@ -826,21 +829,21 @@ void updateMeterAndStatus() {
             g_app.inputHoldUntil = now + 1000;
         }
         const double shown = g_app.inputHoldDb;
-        setStatus(1, clip ? L"入力過大（CLIP）" : (shown <= -998 ? L"信号なし" : formatDbfs(shown)));
+        setStatus(3, clip ? L"入力過大（CLIP）" : (shown <= -998 ? L"信号なし" : formatDbfs(shown)));
         setLevelMeter(g_app.meter, shown, clip, L"入力（マイク）", true);
     } else if (playing) {
         const int percent = static_cast<int>(g_app.audio->playbackProgress() * 100.0);
         setStatus(0, L"送信中 " + std::to_wstring(percent) + L"%");
-        setStatus(1, L"");
+        setStatus(3, L"");
         setLevelMeter(g_app.meter, outDbfs, false, L"送信（デジタル）", true);
     } else {
         setStatus(0, L"待機");
-        setStatus(1, L"");
+        setStatus(3, L"");
         g_app.inputHoldDb = -999.0;
         setLevelMeter(g_app.meter, -999.0, false, L"信号なし", false);
     }
-    setStatus(2, playing ? (outDbfs <= -998 ? L"出力 −∞ dBFS" : L"出力 " + formatDbfs(outDbfs)) : L"");
-    setStatus(3, g_app.path.empty() ? L"(未保存)" : g_app.path);
+    setStatus(4, playing ? (outDbfs <= -998 ? L"出力 −∞ dBFS" : L"出力 " + formatDbfs(outDbfs)) : L"");
+    setStatus(5, g_app.path.empty() ? L"(未保存)" : g_app.path);
     if (HMENU menu = GetMenu(g_app.main)) {
         CheckMenuItem(menu, IDM_TAPE_MONITOR,
                       MF_BYCOMMAND | ((g_app.audio->isRecording() && g_app.audio->isMonitoring()) ? MF_CHECKED
@@ -873,6 +876,8 @@ bool editorImeOpen() {
     return open;
 }
 
+void updateCaretInfo();
+
 void highlightNow() {
     KillTimer(g_app.main, 1);
     if (!g_app.richEdit || g_app.highlighting) return;
@@ -894,7 +899,8 @@ void highlightNow() {
     CHARFORMATW cf;
     std::memset(&cf, 0, sizeof(cf));
     cf.cbSize = sizeof(cf);
-    cf.dwMask = CFM_COLOR;
+    cf.dwMask = CFM_COLOR | CFM_BOLD;
+    cf.dwEffects = 0;
     cf.crTextColor = RGB(0, 0, 0);
     SendMessageW(g_app.editor, EM_SETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&cf));
 
@@ -902,6 +908,7 @@ void highlightNow() {
         const msx::LexToken& token = lex.tokens[i];
         if (token.kind == msx::LexKind::EndOfLine || token.length == 0) continue;
         COLORREF color = RGB(0, 0, 0);
+        bool bold = false;
         switch (token.kind) {
             case msx::LexKind::LineNumber: color = RGB(128, 128, 128); break;
             case msx::LexKind::Integer:
@@ -912,7 +919,16 @@ void highlightNow() {
             case msx::LexKind::String: color = RGB(163, 21, 21); break;
             case msx::LexKind::Comment: color = RGB(0, 128, 0); break;
             case msx::LexKind::Data: color = RGB(128, 80, 0); break;
-            case msx::LexKind::Keyword: color = RGB(0, 0, 180); break;
+            case msx::LexKind::Keyword: {
+                color = RGB(0, 0, 180);
+                const msx::Keyword* kw =
+                    token.tokenCode ? msx::keywordByCode(token.tokenCode) : nullptr;
+                bold = !(kw && (kw->flags & msx::KF_Function));
+                break;
+            }
+            case msx::LexKind::Operator: color = RGB(0, 112, 112); break;
+            case msx::LexKind::Separator: color = RGB(96, 96, 96); break;
+            case msx::LexKind::Variable: color = RGB(0, 90, 90); break;
             default: color = RGB(0, 0, 0); break;
         }
         if (color == RGB(0, 0, 0)) continue;
@@ -921,6 +937,8 @@ void highlightNow() {
         if (end <= start) continue;
         CHARRANGE range = {start, end};
         SendMessageW(g_app.editor, EM_EXSETSEL, 0, reinterpret_cast<LPARAM>(&range));
+        cf.dwMask = CFM_COLOR | CFM_BOLD;
+        cf.dwEffects = bold ? CFE_BOLD : 0;
         cf.crTextColor = color;
         SendMessageW(g_app.editor, EM_SETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&cf));
     }
@@ -929,6 +947,37 @@ void highlightNow() {
     SendMessageW(g_app.editor, WM_SETREDRAW, TRUE, 0);
     InvalidateRect(g_app.editor, nullptr, FALSE);
     g_app.highlighting = false;
+    updateCaretInfo();
+}
+
+bool editorWordChar(wchar_t c) {
+    return (c >= L'0' && c <= L'9') || (c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z') ||
+           c == L'_' || c == L'$' || c == L'%' || c == L'!' || c == L'.' || c == L'#';
+}
+
+void updateCaretInfo() {
+    if (!g_app.editor || !g_app.status) return;
+    if (g_app.highlighting) return;
+    CHARRANGE sel;
+    SendMessageW(g_app.editor, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&sel));
+    const int line = static_cast<int>(SendMessageW(g_app.editor, EM_LINEFROMCHAR,
+                                                   static_cast<WPARAM>(sel.cpMin), 0)) + 1;
+    const int lineIndex = static_cast<int>(SendMessageW(g_app.editor, EM_LINEINDEX,
+                                                        static_cast<WPARAM>(line - 1), 0));
+    const int column = (lineIndex >= 0 && sel.cpMin >= lineIndex) ? sel.cpMin - lineIndex + 1 : 1;
+    setStatus(1, L"行 " + std::to_wstring(line) + L": " + std::to_wstring(column));
+
+    if (!g_app.richEdit) return;
+    const std::wstring wide = getEditorWideLf();
+    if (wide.size() > 200000) {
+        setStatus(2, L"");
+        return;
+    }
+    const std::string full = wideToUtf8(wide);
+    const std::size_t caretByte =
+        wideToUtf8(wide.substr(0, static_cast<std::size_t>(sel.cpMin))).size();
+    const std::string hint = msx::argumentHintAt(full, caretByte, msx::cf2000Profile());
+    setStatus(2, hint.empty() ? L"" : utf8ToWide(hint));
 }
 
 void hideCompletion() {
@@ -936,7 +985,7 @@ void hideCompletion() {
     g_app.completions.clear();
 }
 
-void showCompletion() {
+void showCompletion(bool requirePrefix = false) {
     if (!g_app.richEdit) return;
     CHARRANGE range;
     SendMessageW(g_app.editor, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&range));
@@ -951,6 +1000,10 @@ void showCompletion() {
         } else {
             break;
         }
+    }
+    if (requirePrefix && wordStart >= range.cpMin) {
+        hideCompletion();
+        return;
     }
     const std::string full = wideToUtf8(wide);
     const std::size_t caretByte = wideToUtf8(wide.substr(0, static_cast<std::size_t>(range.cpMin))).size();
@@ -1011,6 +1064,10 @@ void acceptCompletion() {
 }
 
 LRESULT CALLBACK editorProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_APP_AUTOCOMPLETE) {
+        if (GetFocus() == hwnd) showCompletion(true);
+        return 0;
+    }
     if (msg == WM_KEYDOWN) {
         const bool popupVisible = g_app.popup && IsWindowVisible(g_app.popup);
         if (wParam == VK_SPACE && (GetKeyState(VK_CONTROL) & 0x8000)) {
@@ -1038,7 +1095,16 @@ LRESULT CALLBACK editorProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             }
         }
-    } else if (msg == WM_CHAR || msg == WM_LBUTTONDOWN) {
+    } else if (msg == WM_CHAR) {
+        const wchar_t c = static_cast<wchar_t>(wParam);
+        const bool popupVisible = g_app.popup && IsWindowVisible(g_app.popup);
+        const bool digit = c >= L'0' && c <= L'9';
+        if (editorWordChar(c) && (!digit || popupVisible) && !editorImeOpen()) {
+            PostMessageW(hwnd, WM_APP_AUTOCOMPLETE, 0, 0);
+        } else {
+            hideCompletion();
+        }
+    } else if (msg == WM_LBUTTONDOWN) {
         hideCompletion();
     } else if (msg == WM_KILLFOCUS) {
         hideCompletion();
@@ -1123,8 +1189,8 @@ void createChildren(HWND hwnd) {
 
     g_app.status = CreateStatusWindowW(WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP, L"", hwnd, IDC_STATUS);
     SendMessageW(g_app.status, WM_SETFONT, reinterpret_cast<WPARAM>(g_app.uiFont), TRUE);
-    int parts[4] = {180, 180, 160, -1};
-    SendMessageW(g_app.status, SB_SETPARTS, 4, reinterpret_cast<LPARAM>(parts));
+    int parts[6] = {150, 100, 320, 110, 110, -1};
+    SendMessageW(g_app.status, SB_SETPARTS, 6, reinterpret_cast<LPARAM>(parts));
 
     g_app.meter = createLevelMeter(hwnd, g_app.instance, IDC_METER);
 
@@ -1144,6 +1210,10 @@ void createChildren(HWND hwnd) {
 }
 
 void onCommand(HWND hwnd, int id, int notifyCode, HWND control) {
+    if (control == g_app.editor && notifyCode == EN_SELCHANGE) {
+        updateCaretInfo();
+        return;
+    }
     if (control == g_app.editor && notifyCode == EN_CHANGE) {
         if (!g_app.ignoreChange) {
             g_app.modified = true;
@@ -1303,6 +1373,7 @@ LRESULT CALLBACK mainProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_app.audio = new AudioEngine(hwnd);
             createChildren(hwnd);
             layout(hwnd);
+            updateCaretInfo();
             PostMessageW(hwnd, WM_SIZE, 0, 0);
             loadSettings();
             updateTitle();
