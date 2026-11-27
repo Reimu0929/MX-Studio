@@ -22,7 +22,7 @@ BASIC 編集・トークン化・カセット（FSK）変復調ツールです�
 
 ## 状態
 
-- 自動試験: **827 checks / 0 failures**
+- 自動試験: **830 checks / 0 failures**
 - Windows: MSVC でビルドし、`selftest` と往復変換を CI で確認
 - **XP SP3 実機・物理テープ・openMSX は未検証**
 

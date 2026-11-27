@@ -256,4 +256,15 @@ std::string argumentHintAt(const std::string& utf8Source, std::size_t caret, con
     return hint ? std::string(hint) : std::string();
 }
 
+std::string keywordHint(const std::string& keyword) {
+    std::string upper;
+    upper.reserve(keyword.size());
+    for (std::size_t i = 0; i < keyword.size(); ++i) {
+        const char c = keyword[i];
+        upper += (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
+    }
+    const char* hint = hintFor(upper);
+    return hint ? std::string(hint) : std::string();
+}
+
 }  // namespace msx

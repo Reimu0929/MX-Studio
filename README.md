@@ -183,7 +183,7 @@ ctest --test-dir build --output-on-failure
 ./build/tools/msxtool/msxtool selftest
 ```
 
-現在の自動試験: **827 checks / 0 failures**（27 グループ）。
+現在の自動試験: **830 checks / 0 failures**（28 グループ）。
 FSK の往復は自作波形と自作復調によるもので、規格適合の証明ではありません。
 
 ### MinGW クロスコンパイル（確認用）

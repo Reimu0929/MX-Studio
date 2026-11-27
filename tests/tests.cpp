@@ -867,6 +867,12 @@ TEST(completion_basics) {
     CHECK_EQ(argumentHintAt("10 PRINT ", 9, cf2000Profile()).empty(), false);
 }
 
+TEST(keyword_hint) {
+    CHECK(!keywordHint("print").empty());
+    CHECK(!keywordHint("PRINT").empty());
+    CHECK(keywordHint("NOT_A_KEYWORD").empty());
+}
+
 TEST(completion_context) {
     // Statement start: statements are offered.
     const std::string stmt = "10 ";

@@ -43,6 +43,9 @@ struct App {
     HWND status = nullptr;
     HWND meter = nullptr;
     HWND popup = nullptr;
+    HWND tip = nullptr;
+    std::string hoverToken;
+    int hoverChar = -1;
     HWND buttons[5] = {nullptr, nullptr, nullptr, nullptr, nullptr};
     HFONT uiFont = nullptr;
     HFONT monoFont = nullptr;
@@ -867,21 +870,23 @@ int utf16LengthFromUtf8(const std::string& text, std::size_t byteOffset) {
     return len;
 }
 
-bool editorImeOpen() {
+bool editorImeComposing() {
     if (!g_app.richEdit || !g_app.editor) return false;
     HIMC context = ImmGetContext(g_app.editor);
     if (!context) return false;
-    const bool open = ImmGetOpenStatus(context) != 0;
+    const LONG composing = ImmGetCompositionStringW(context, GCS_COMPSTR, nullptr, 0);
+    const LONG reading = ImmGetCompositionStringW(context, GCS_COMPREADSTR, nullptr, 0);
     ImmReleaseContext(g_app.editor, context);
-    return open;
+    return composing > 0 || reading > 0;
 }
 
 void updateCaretInfo();
+void hideHoverTip();
 
 void highlightNow() {
     KillTimer(g_app.main, 1);
     if (!g_app.richEdit || g_app.highlighting) return;
-    if (editorImeOpen()) return;
+    if (editorImeComposing()) return;
     const std::wstring wideLf = getEditorWideLf();
     if (wideLf.size() > 120000) return;
     const std::string text = wideToUtf8(wideLf);
@@ -987,6 +992,7 @@ void hideCompletion() {
 
 void showCompletion(bool requirePrefix = false) {
     if (!g_app.richEdit) return;
+    hideHoverTip();
     CHARRANGE range;
     SendMessageW(g_app.editor, EM_EXGETSEL, 0, reinterpret_cast<LPARAM>(&range));
     const std::wstring wide = getEditorWideLf();
@@ -1063,16 +1069,95 @@ void acceptCompletion() {
     SetFocus(g_app.editor);
 }
 
+void hideHoverTip() {
+    if (g_app.tip) ShowWindow(g_app.tip, SW_HIDE);
+    g_app.hoverToken.clear();
+}
+
+void showHoverTip(const std::wstring& text, POINT screen) {
+    if (!g_app.tip || text.empty()) {
+        hideHoverTip();
+        return;
+    }
+    HDC dc = GetDC(g_app.tip);
+    HGDIOBJ old = SelectObject(dc, g_app.uiFont);
+    SIZE size = {0, 0};
+    GetTextExtentPoint32W(dc, text.c_str(), static_cast<int>(text.size()), &size);
+    SelectObject(dc, old);
+    ReleaseDC(g_app.tip, dc);
+    SetWindowTextW(g_app.tip, text.c_str());
+    SetWindowPos(g_app.tip, HWND_TOPMOST, screen.x + 16, screen.y + 20, size.cx + 14, size.cy + 10,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+}
+
+void updateHoverInfo(int x, int y) {
+    if (!g_app.richEdit || !g_app.editor) return;
+    POINTL point = {x, y};
+    const int cp = static_cast<int>(SendMessageW(g_app.editor, EM_CHARFROMPOS, 0,
+                                                 reinterpret_cast<LPARAM>(&point)));
+    if (cp < 0) {
+        hideHoverTip();
+        return;
+    }
+    if (cp == g_app.hoverChar) return;
+    g_app.hoverChar = cp;
+    const std::wstring wide = getEditorWideLf();
+    if (wide.size() > 200000 || static_cast<std::size_t>(cp) > wide.size()) {
+        hideHoverTip();
+        return;
+    }
+    const std::string full = wideToUtf8(wide);
+    const std::size_t byte = wideToUtf8(wide.substr(0, static_cast<std::size_t>(cp))).size();
+    msx::LexResult lex = msx::lexSource(full, msx::cf2000Profile());
+    const msx::LexToken* token = nullptr;
+    for (std::size_t i = 0; i < lex.tokens.size(); ++i) {
+        const msx::LexToken& t = lex.tokens[i];
+        if (byte >= t.offset && byte < t.offset + t.length) {
+            token = &t;
+            break;
+        }
+    }
+    if (!token || token->kind != msx::LexKind::Keyword) {
+        hideHoverTip();
+        return;
+    }
+    if (g_app.hoverToken == token->text) return;
+    const std::string hint = msx::keywordHint(token->text);
+    if (hint.empty()) {
+        hideHoverTip();
+        return;
+    }
+    g_app.hoverToken = token->text;
+    POINT screen;
+    GetCursorPos(&screen);
+    showHoverTip(utf8ToWide(hint), screen);
+}
+
 LRESULT CALLBACK editorProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_PASTE) {
+        if (OpenClipboard(hwnd)) {
+            bool pasted = false;
+            if (HANDLE data = GetClipboardData(CF_UNICODETEXT)) {
+                if (const wchar_t* text = static_cast<const wchar_t*>(GlobalLock(data))) {
+                    SendMessageW(hwnd, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(text));
+                    GlobalUnlock(data);
+                    pasted = true;
+                }
+            }
+            CloseClipboard();
+            if (pasted) return 0;
+        }
+    }
     if (msg == WM_APP_AUTOCOMPLETE) {
         if (GetFocus() == hwnd) showCompletion(true);
         return 0;
     }
     if (msg == WM_KEYDOWN) {
+        hideHoverTip();
         const bool popupVisible = g_app.popup && IsWindowVisible(g_app.popup);
         if (wParam == VK_SPACE && (GetKeyState(VK_CONTROL) & 0x8000)) {
             // Do not steal Ctrl+Space from the Japanese IME while composing.
-            if (!editorImeOpen()) {
+            if (!editorImeComposing()) {
                 showCompletion();
                 return 0;
             }
@@ -1096,18 +1181,28 @@ LRESULT CALLBACK editorProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
         }
     } else if (msg == WM_CHAR) {
+        hideHoverTip();
         const wchar_t c = static_cast<wchar_t>(wParam);
         const bool popupVisible = g_app.popup && IsWindowVisible(g_app.popup);
         const bool digit = c >= L'0' && c <= L'9';
-        if (editorWordChar(c) && (!digit || popupVisible) && !editorImeOpen()) {
+        if (editorWordChar(c) && (!digit || popupVisible) && !editorImeComposing()) {
             PostMessageW(hwnd, WM_APP_AUTOCOMPLETE, 0, 0);
         } else {
             hideCompletion();
         }
     } else if (msg == WM_LBUTTONDOWN) {
         hideCompletion();
+        hideHoverTip();
+    } else if (msg == WM_MOUSEMOVE) {
+        TRACKMOUSEEVENT track = {sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd, 0};
+        TrackMouseEvent(&track);
+        updateHoverInfo(static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam)));
+    } else if (msg == WM_MOUSELEAVE) {
+        g_app.hoverChar = -1;
+        hideHoverTip();
     } else if (msg == WM_KILLFOCUS) {
         hideCompletion();
+        hideHoverTip();
     }
     return CallWindowProcW(g_editorProc, hwnd, msg, wParam, lParam);
 }
@@ -1120,8 +1215,18 @@ void createEditor(HWND parent) {
             WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL |
                 ES_NOHIDESEL | WS_TABSTOP,
             0, 0, 100, 100, parent, reinterpret_cast<HMENU>(IDC_EDITOR), g_app.instance, nullptr);
-        g_app.richEdit = g_app.editor != nullptr;
     }
+    if (!g_app.editor) {
+        HMODULE rich41 = LoadLibraryW(L"msftedit.dll");
+        if (rich41) {
+            g_app.editor = CreateWindowExW(
+                WS_EX_CLIENTEDGE, L"RICHEDIT50W", L"",
+                WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE | ES_AUTOVSCROLL |
+                    ES_AUTOHSCROLL | ES_NOHIDESEL | WS_TABSTOP,
+                0, 0, 100, 100, parent, reinterpret_cast<HMENU>(IDC_EDITOR), g_app.instance, nullptr);
+        }
+    }
+    g_app.richEdit = g_app.editor != nullptr;
     if (!g_app.editor) {
         g_app.editor = CreateWindowExW(
             WS_EX_CLIENTEDGE, L"EDIT", L"",
@@ -1133,7 +1238,6 @@ void createEditor(HWND parent) {
     if (g_app.richEdit) {
         SendMessageW(g_app.editor, EM_SETEVENTMASK, 0, ENM_CHANGE | ENM_SELCHANGE);
         SendMessageW(g_app.editor, EM_EXLIMITTEXT, 0, 1024 * 1024);
-        SendMessageW(g_app.editor, EM_SETTEXTMODE, TM_PLAINTEXT, 0);
         g_editorProc = reinterpret_cast<WNDPROC>(
             SetWindowLongPtrW(g_app.editor, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(editorProc)));
     }
@@ -1207,6 +1311,11 @@ void createChildren(HWND hwnd) {
                                   WS_CHILD | WS_BORDER | WS_VSCROLL | LBS_NOTIFY, 0, 0, 100, 100, hwnd, nullptr,
                                   g_app.instance, nullptr);
     SendMessageW(g_app.popup, WM_SETFONT, reinterpret_cast<WPARAM>(g_app.monoFont), TRUE);
+
+    g_app.tip = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"STATIC", L"",
+                                WS_POPUP | WS_BORDER | SS_LEFT | SS_NOPREFIX, 0, 0, 10, 10, hwnd, nullptr,
+                                g_app.instance, nullptr);
+    if (g_app.tip) SendMessageW(g_app.tip, WM_SETFONT, reinterpret_cast<WPARAM>(g_app.uiFont), TRUE);
 }
 
 void onCommand(HWND hwnd, int id, int notifyCode, HWND control) {
@@ -1380,6 +1489,8 @@ LRESULT CALLBACK mainProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             updateButtons();
             SetTimer(hwnd, 2, 66, nullptr);
             logLine(L"MSX CF-2000 Studio 0.1.0");
+            logLine(g_app.richEdit ? L"エディター: RichEdit（色分け・補完が有効）"
+                                   : L"エディター: 素の EDIT（色分け・補完は無効）");
             logLine(L"実機・XP での受入試験は未実施のプレビュー版です。送信完了は受信成功ではありません。");
             return 0;
         }
